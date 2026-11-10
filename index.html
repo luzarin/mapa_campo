@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#163b2e">
+  <title>Mapa de campo · Peñaflor</title>
+  <link rel="stylesheet" href="./leaflet.css">
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #163329; }
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+    header { background: #163b2e; color: white; padding: 10px 12px; display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+    h1 { font-size: 17px; margin: 0; }
+    header small { color: #d9e8df; }
+    button { min-height: 44px; padding: 0 12px; border-radius: 8px; border: 0; background: #f6faf7; color: #163329; font: inherit; font-weight: 650; white-space: nowrap; cursor: pointer; }
+    .layers { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; padding: 0 12px; background: #fff; }
+    label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; min-height: 44px; cursor: pointer; }
+    input { width: 17px; height: 17px; margin: 0; }
+    .frutales-color { accent-color: #157247; }
+    .trigo-color { accent-color: #9b5000; }
+    .maiz-color { accent-color: #6940a5; }
+    .status { margin: 0; padding: 5px 12px 7px; background: #f4f6f3; color: #394f44; font-size: 12px; }
+    #mapa { flex: 1; min-height: 0; background: #edf0e9; }
+    .ficha strong { display: block; font-size: 16px; margin-bottom: 4px; }
+    .ficha small { font-size: 12px; }
+    @media (max-width: 360px) { .layers { gap: 0 7px; padding: 0 8px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>Mapa de campo</h1><small>Peñaflor y comunas vecinas</small></div>
+    <button type="button" id="ubicacion">Mi ubicación</button>
+  </header>
+  <div class="layers" role="group" aria-label="Capas de cultivo">
+    <label><input type="checkbox" class="frutales-color" value="frutales" checked>Frutales</label>
+    <label><input type="checkbox" class="trigo-color" value="trigo" checked>Trigo 2026</label>
+    <label><input type="checkbox" class="maiz-color" value="maiz" checked>Maíz 2025</label>
+  </div>
+  <p class="status" id="estado" role="status">Cargando polígonos…</p>
+  <main id="mapa" aria-label="Mapa de Peñaflor y comunas vecinas"></main>
+  <script src="./leaflet.js"></script>
+  <script>
+    const status = document.getElementById('estado');
+    const map = L.map('mapa', { zoomControl: false }).setView([-33.61, -70.88], 12);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+    const boundary = L.geoJSON(null, {
+      style: {color: '#63736a', weight: 1, dashArray: '5 4', fill: false, interactive: false}
+    }).addTo(map);
+    const colors = {frutales: '#157247', trigo: '#9b5000', maiz: '#6940a5'};
+    const orchardGroups = [
+      {color: '#ed7117', species: /^(NARANJO|LIMONERO|MANDARINO|POMELO|LIMA|TANGELO)$/},
+      {color: '#087e89', species: /^(NOGAL|ALMENDRO|PISTACHO|PECANA)$/},
+      {color: '#b02a68', species: /^(CEREZO|CIRUELO.*|DURAZNERO.*|DAMASCO|NECTARINO|PLUOTS)$/},
+      {color: '#157247', species: /^PALTO$/},
+      {color: '#2868c7', species: /^VID\b/}
+    ];
+    function orchardColor(crop) {
+      const primarySpecies = crop.split(' / ', 1)[0].toUpperCase();
+      return orchardGroups.find(group => group.species.test(primarySpecies))?.color ?? '#64748b';
+    }
+    const sources = {
+      frutales: 'Catastro frutícola',
+      trigo: 'Estimación COTRISA',
+      maiz: 'Estimación COTRISA · referencia histórica'
+    };
+    const overlays = {};
+    for (const [key, color] of Object.entries(colors)) {
+      overlays[key] = L.geoJSON(null, {
+        style: feature => ({
+          className: key,
+          color: key === 'frutales' ? orchardColor(feature.properties.cultivo) : color,
+          weight: 1.2,
+          fillOpacity: 0.35
+        }),
+        onEachFeature(feature, layer) {
+          const {cultivo, anio} = feature.properties;
+          const popup = document.createElement('div');
+          popup.className = 'ficha';
+          const title = document.createElement('strong');
+          title.textContent = cultivo;
+          const detail = document.createElement('small');
+          detail.textContent = sources[key] + ' · ' + anio;
+          popup.append(title, detail);
+          layer.bindPopup(popup);
+        }
+      }).addTo(map);
+    }
+
+    document.querySelectorAll('.layers input').forEach(input => {
+      input.addEventListener('change', () => {
+        const layer = overlays[input.value];
+        if (input.checked) layer.addTo(map);
+        else layer.remove();
+      });
+    });
+
+    let locating = false;
+    let locationLayer;
+    const locate = document.getElementById('ubicacion');
+    locate.addEventListener('click', () => {
+      locating = true;
+      status.textContent = 'Buscando tu ubicación…';
+      map.locate({enableHighAccuracy: true, timeout: 12000});
+    });
+    map.on('locationfound', event => {
+      if (locationLayer) locationLayer.remove();
+      locationLayer = L.layerGroup([
+        L.circle(event.latlng, {radius: event.accuracy, color: '#1671d5', weight: 1, fillOpacity: 0.1}),
+        L.circleMarker(event.latlng, {radius: 7, color: 'white', weight: 2, fillColor: '#1671d5', fillOpacity: 1})
+      ]).addTo(map);
+      map.setView(event.latlng, 16);
+      status.textContent = 'Ubicación encontrada';
+    });
+    map.on('locationerror', () => {
+      status.textContent = 'No pudimos ubicarte. Revisa el permiso de ubicación y vuelve a tocar el botón.';
+    });
+
+    fetch('./campo.geojson')
+      .then(response => {
+        if (!response.ok) throw new Error('Capas no disponibles');
+        return response.json();
+      })
+      .then(data => {
+        let count = 0;
+        for (const feature of data.features) {
+          const key = feature.properties.capa;
+          if (key === 'comunas') boundary.addData(feature);
+          else { overlays[key].addData(feature); count++; }
+        }
+        if (!locating) {
+          map.fitBounds(boundary.getBounds(), {padding: [8, 8]});
+          status.textContent = count.toLocaleString('es-CL') + ' polígonos cargados · Toca uno para ver su ficha';
+        }
+      })
+      .catch(() => { status.textContent = 'No se pudieron cargar los polígonos. Recarga la página con conexión.'; });
+  </script>
+</body>
+</html>

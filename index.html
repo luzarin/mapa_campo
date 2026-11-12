@@ -176,7 +176,9 @@
     });
 
     let locating = false;
+    let followLocation = false;
     let locationLayer;
+    map.on('dragstart', () => { followLocation = false; });
     const locate = document.getElementById('ubicacion');
     locate.addEventListener('click', () => {
       if (locating) {
@@ -185,6 +187,7 @@
         return;
       }
       locating = true;
+      followLocation = true;
       locate.textContent = 'Detener';
       status.textContent = 'Buscando tu ubicación…';
       map.locate({watch: true, enableHighAccuracy: true, timeout: 12000});
@@ -204,8 +207,10 @@
         L.circle(event.latlng, {radius: event.accuracy, color: '#1671d5', weight: 1, fillOpacity: 0.1}),
         L.circleMarker(event.latlng, {radius: 7, color: 'white', weight: 2, fillColor: '#1671d5', fillOpacity: 1})
       ]).addTo(map);
-      if (firstPosition) map.setView(event.latlng, 16);
-      else map.panTo(event.latlng, {animate: false});
+      if (followLocation) {
+        if (firstPosition) map.setView(event.latlng, 16);
+        else map.panTo(event.latlng, {animate: false});
+      }
       status.textContent = 'Ubicación en vivo';
     });
     map.on('locationerror', event => {

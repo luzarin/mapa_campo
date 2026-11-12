@@ -113,21 +113,43 @@
     let locationLayer;
     const locate = document.getElementById('ubicacion');
     locate.addEventListener('click', () => {
+      if (locating) {
+        stopFollowing();
+        status.textContent = 'Seguimiento detenido';
+        return;
+      }
       locating = true;
+      locate.textContent = 'Detener';
       status.textContent = 'Buscando tu ubicación…';
-      map.locate({enableHighAccuracy: true, timeout: 12000});
+      map.locate({watch: true, enableHighAccuracy: true, timeout: 12000});
     });
+    function stopFollowing() {
+      map.stopLocate();
+      locating = false;
+      locate.textContent = 'Mi ubicación';
+      if (locationLayer) locationLayer.remove();
+      locationLayer = null;
+    }
     map.on('locationfound', event => {
+      if (!locating) return;
+      const firstPosition = !locationLayer;
       if (locationLayer) locationLayer.remove();
       locationLayer = L.layerGroup([
         L.circle(event.latlng, {radius: event.accuracy, color: '#1671d5', weight: 1, fillOpacity: 0.1}),
         L.circleMarker(event.latlng, {radius: 7, color: 'white', weight: 2, fillColor: '#1671d5', fillOpacity: 1})
       ]).addTo(map);
-      map.setView(event.latlng, 16);
-      status.textContent = 'Ubicación encontrada';
+      if (firstPosition) map.setView(event.latlng, 16);
+      else map.panTo(event.latlng, {animate: false});
+      status.textContent = 'Ubicación en vivo';
     });
-    map.on('locationerror', () => {
-      status.textContent = 'No pudimos ubicarte. Revisa el permiso de ubicación y vuelve a tocar el botón.';
+    map.on('locationerror', event => {
+      if (!locating) return;
+      if (event.code === 1) {
+        stopFollowing();
+        status.textContent = 'Revisa el permiso de ubicación y vuelve a tocar el botón.';
+      } else {
+        status.textContent = 'Esperando señal de GPS…';
+      }
     });
 
     fetch('./campo.geojson')

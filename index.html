@@ -25,6 +25,10 @@
     .frutales-color { accent-color: #157247; }
     .trigo-color { accent-color: #9b5000; }
     .maiz-color { accent-color: #6940a5; }
+    #marcar { margin-left: auto; font-size: 13px; }
+    #marcar[aria-pressed="true"] { background: #163b2e; color: white; }
+    .punto-form input { display: block; width: 100%; height: 44px; font-size: 16px; margin: 4px 0 8px; }
+    .punto-form label { display: block; min-height: 0; }
     .status { margin: 0; padding: 5px 12px 7px; background: #f4f6f3; color: #394f44; font-size: 12px; }
     #mapa { flex: 1; min-height: 0; background: #edf0e9; }
     .ficha strong { display: block; font-size: 16px; margin-bottom: 4px; }
@@ -41,6 +45,7 @@
     <label><input type="checkbox" class="frutales-color" value="frutales" checked>Frutales</label>
     <label><input type="checkbox" class="trigo-color" value="trigo" checked>Trigo 2026</label>
     <label><input type="checkbox" class="maiz-color" value="maiz" checked>Maíz 2025</label>
+    <button type="button" id="marcar" aria-pressed="false">Marcar punto</button>
   </div>
   <p class="status" id="estado" role="status">Cargando polígonos…</p>
   <main id="mapa" aria-label="Mapa de Peñaflor y comunas vecinas"></main>
@@ -49,6 +54,67 @@
     const status = document.getElementById('estado');
     const map = L.map('mapa', { zoomControl: false }).setView([-33.61, -70.88], 12);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
+    const mark = document.getElementById('marcar');
+    const pointStorage = 'mapa-campo-puntos';
+    let points = [];
+    try {
+      points = JSON.parse(localStorage.getItem(pointStorage) || '[]');
+    } catch {
+      status.textContent = 'No se pudieron leer los puntos guardados.';
+    }
+
+    function showPoint({lat, lng, cultivo}) {
+      const card = document.createElement('div');
+      card.className = 'ficha';
+      const name = document.createElement('strong');
+      name.textContent = cultivo;
+      const coordinates = document.createElement('small');
+      coordinates.textContent = lat.toFixed(6) + ', ' + lng.toFixed(6);
+      card.append(name, coordinates);
+      return L.circleMarker([lat, lng], {
+        className: 'punto-guardado', radius: 8, color: '#fff', weight: 2,
+        fillColor: '#d23432', fillOpacity: 1, bubblingMouseEvents: false
+      }).addTo(map).bindPopup(card);
+    }
+    points.forEach(showPoint);
+
+    function setMarking(active) {
+      mark.setAttribute('aria-pressed', String(active));
+      mark.textContent = active ? 'Toca el mapa' : 'Marcar punto';
+    }
+    mark.addEventListener('click', () => {
+      map.closePopup();
+      setMarking(mark.getAttribute('aria-pressed') !== 'true');
+    });
+    map.on('click', ({latlng}) => {
+      if (mark.getAttribute('aria-pressed') !== 'true') return;
+      setMarking(false);
+      const form = document.createElement('form');
+      form.className = 'punto-form';
+      form.innerHTML = '<label>Cultivo <input type="text" required maxlength="100"></label>' +
+        '<button type="submit">Guardar</button><p role="status"></p>';
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        const input = form.querySelector('input');
+        const cultivo = input.value.trim();
+        if (!cultivo) {
+          input.value = '';
+          input.reportValidity();
+          return;
+        }
+        const point = {lat: latlng.lat, lng: latlng.lng, cultivo};
+        const updated = [...points, point];
+        try {
+          localStorage.setItem(pointStorage, JSON.stringify(updated));
+        } catch {
+          form.querySelector('[role="status"]').textContent = 'El navegador no pudo guardar el punto.';
+          return;
+        }
+        points = updated;
+        showPoint(point).openPopup();
+      });
+      L.popup().setLatLng(latlng).setContent(form).openOn(map);
+    });
     const streets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(map);

@@ -50,9 +50,18 @@
   <p class="status" id="estado" role="status">Cargando polígonos…</p>
   <main id="mapa" aria-label="Mapa de Peñaflor y comunas vecinas"></main>
   <script src="./leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.6.0/dist/leaflet-rotate.js"
+    integrity="sha384-AAtyl9JHQBqlnEErmUPpMUw8Jn8jnk9JO+Crbj5Kni3PWLGTkUWotBj9KQZ5cPIG"
+    crossorigin="anonymous"></script>
   <script>
     const status = document.getElementById('estado');
-    const map = L.map('mapa', { zoomControl: false }).setView([-33.61, -70.88], 12);
+    const map = L.map('mapa', {
+      zoomControl: false,
+      rotate: true,
+      touchRotate: true,
+      pitchDrag: false,
+      rotateControl: {closeOnZeroBearing: false, visualizePitch: false}
+    }).setView([-33.61, -70.88], 12);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     const mark = document.getElementById('marcar');
     const pointStorage = 'mapa-campo-puntos';
